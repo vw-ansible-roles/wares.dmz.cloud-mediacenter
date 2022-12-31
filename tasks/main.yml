@@ -1,0 +1,185 @@
+---
+# tasks file for cloud-mediacenter
+- name: Ensure write group exists with correct gid
+  ansible.builtin.group:
+    name: "{{ cloud_mediacenter_write_group }}"
+    state: present
+    gid: 1500
+
+- name: Ensure write users exists with correct group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    state: present
+    group: "{{ cloud_mediacenter_write_group }}"
+  loop: "{{ cloud_mediacenter_write_users }}"
+
+- name: Create HD mount point if doesn't exist
+  ansible.builtin.file:
+    path: "{{ cloud_mediacenter_mount_dir }}/{{ cloud_mediacenter_hd_mountpoint_name }}"
+    state: directory
+    mode: '0775'
+
+- name: Set /etc/fstab entry for HD
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    # Any line that begins with cloud_mediacenter_hd_partuuid
+    regexp: '^PARTUUID={{cloud_mediacenter_hd_partuuid}}.*'
+    line: "PARTUUID={{cloud_mediacenter_hd_partuuid}} {{ cloud_mediacenter_mount_dir }}/{{ cloud_mediacenter_hd_mountpoint_name }} {{cloud_mediacenter_hd_type}} defaults,nofail,acl 0 0"
+
+- name: Set /etc/fstab entry for secondary drive 
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    # Any line that begins with...
+    regexp: '^PARTUUID={{cloud_mediacenter_sd_partuuid}}.*'
+    line: "PARTUUID={{cloud_mediacenter_sd_partuuid}} {{ cloud_mediacenter_automount_dir }}/{{ cloud_mediacenter_sd_mountpoint_name }} {{cloud_mediacenter_sd_type}} noauto,nofail,acl,x-systemd.automount,x-systemd.idle-timeout=2s,x-systemd.device-timeout=30ms 0 0"
+
+- name: Install Samba package
+  ansible.builtin.apt:
+    name: samba
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Create samba users
+  ansible.builtin.shell: "(echo {{ item['smbpasswd'] }}; echo {{ item['smbpasswd'] }}) | smbpasswd -s -a {{ item['name'] }}"
+  with_items:
+    - "{{cloud_mediacenter_samba_users}}"
+  no_log: True
+
+- name: Edit Samba configuration
+  ansible.builtin.template:
+    src: cloud-mediacenter_smb.conf
+    dest: /etc/samba/smb.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart smbd
+
+- name: Install Transmission package
+  ansible.builtin.apt:
+    name: transmission-daemon
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+ 
+- name: Stop Transmission Daemon before modifying settings
+  ansible.builtin.service:
+    name: transmission-daemon
+    state: stopped
+    
+- name: Add Transmission user to write group
+  ansible.builtin.user: name="{{ cloud_mediacenter_transmission_user }}"
+        groups="{{ cloud_mediacenter_write_group }}"
+        append=yes
+    
+- name: Edit Transmission configuration
+  ansible.builtin.template:
+    src: cloud-mediacenter_transmission-settings.json
+    dest: /etc/transmission-daemon/settings.json
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Install kodi package
+  ansible.builtin.apt:
+    name: kodi
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Edit Kodi startup script
+  ansible.builtin.template:
+    src: cloud-mediacenter_start-kodi-sa.sh
+    dest: "{{ cloud_mediacenter_kodi_svcstart }}"
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Edit Kodi startup service
+  ansible.builtin.template:
+    src: cloud-mediacenter_kodi.service
+    dest: "/etc/systemd/system/{{ cloud_mediacenter_kodi_svcname }}.service"
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - init kodi service
+    - enable kodi service
+    #- start kodi service
+
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Install acl package
+  ansible.builtin.apt:
+    name: acl
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Reboot host
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+
+- name: Wait until hd is mounted before continuing
+  ansible.builtin.wait_for:
+    path: "{{ cloud_mediacenter_mount_dir }}/{{ cloud_mediacenter_hd_mountpoint_name }}/Games/saves"
+    timeout: 60
+
+- name: Recursively change ownership for all dirs
+  ansible.builtin.file:
+    path: "{{ cloud_mediacenter_mount_dir }}/{{ cloud_mediacenter_hd_mountpoint_name }}"
+    recurse: yes
+    owner: root
+    group: "{{ cloud_mediacenter_write_group }}"
+    mode: '0775'
+    
+- name: Recursively change ownership for emulators saves dirs
+  ansible.builtin.file:
+    path: "{{ cloud_mediacenter_mount_dir }}/{{ cloud_mediacenter_hd_mountpoint_name }}/Games/saves"
+    recurse: yes
+    owner: "{{ cloud_mediacenter_emulators_user }}"
+    group: "{{ cloud_mediacenter_write_group }}"
+
+- name: PLEASE TURN IN SECONDARY DRIVE TO CONTINUE
+  ansible.builtin.shell: "mountpoint -q {{ cloud_mediacenter_automount_dir }}/{{ cloud_mediacenter_sd_mountpoint_name }}"
+  register: mount_secondary_drive_mountpoint
+  until: mount_secondary_drive_mountpoint.rc == 0
+  retries: "{{ cloud_mediacenter_mount_secondary_drive_retries }}"
+  delay: "{{ cloud_mediacenter_mount_secondary_drive_retry_delay_in_seconds }}"
+  when: cloud_mediacenter_sd_active == 1
+
+- name: Create Transmission download/incomplete dirs if they don't exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ cloud_mediacenter_transmission_user }}"
+    group: "{{ cloud_mediacenter_write_group }}"
+    mode: 'u=rwxs,g=rwxs,o=rx'
+  loop:
+    - "{{ cloud_mediacenter_transmission_download_dir }}"
+    - "{{ cloud_mediacenter_transmission_incomplete_dir }}"
+
+- name: Recursively change owner/permissions/setgid for Transmission download/incomplete dirs
+  ansible.builtin.file:
+    path: "{{ item }}"
+    recurse: yes
+    owner: "{{ cloud_mediacenter_transmission_user }}"
+    group: "{{ cloud_mediacenter_write_group }}"
+    mode: 'u=rwx,g=rwxs,o=rx'
+  loop:
+    - "{{ cloud_mediacenter_transmission_download_dir }}"
+    - "{{ cloud_mediacenter_transmission_incomplete_dir }}"
+
+- name: Set acl for Transmission download/incomplete dirs
+  ansible.builtin.shell:
+    cmd: "/usr/bin/setfacl -R -d -m g::rwx {{ item }}"
+  loop:
+    - "{{ cloud_mediacenter_transmission_download_dir }}"
+    - "{{ cloud_mediacenter_transmission_incomplete_dir }}"
+
+- name: Start Transmission Daemon
+  ansible.builtin.service:
+    name: transmission-daemon
+    state: restarted

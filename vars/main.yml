@@ -1,0 +1,24 @@
+---
+# vars file for cloud-mediacenter
+
+# General
+cloud_mediacenter_hd_partuuid: "799d2ju8-d5fd-463h-b97k-ll9cc0d0aa45" # use 'blkid' command to find out
+cloud_mediacenter_sd_partuuid: "5a7a7896-1238-7f98-96ed-4ddf47a55eb1" # use 'blkid' command to find out
+cloud_mediacenter_sd_active: 0
+cloud_mediacenter_emulators_user: "emulators"
+cloud_mediacenter_write_users: 
+  - john
+  - admin
+  - emulators
+cloud_mediacenter_write_group: "hdadmins"
+
+# Samba
+cloud_mediacenter_samba_workgroup: "workgroup"
+cloud_mediacenter_samba_hostname: "sambahost"
+cloud_mediacenter_samba_users:
+  - {name: 'john', smbpasswd: 'j0hnP@55w0rd'}
+  - {name: 'emulators', smbpasswd: '3mu74t0r5'}
+  
+# Transmission
+cloud_mediacenter_transmission_rpc_username: 'sam'
+cloud_mediacenter_transmission_rpc_password: 's4mP@55w0rd'
