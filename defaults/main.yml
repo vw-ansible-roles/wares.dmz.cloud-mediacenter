@@ -16,6 +16,7 @@ cloud_mediacenter_transmission_bind_address_ipv4: '0.0.0.0' # default: '0.0.0.0'
 cloud_mediacenter_transmission_bind_address_ipv6: '::' # default: '::'
 cloud_mediacenter_transmission_download_dir: "{{ cloud_mediacenter_mount_dir }}/{{ cloud_mediacenter_hd_mountpoint_name }}/Incoming" # default: '/var/lib/transmission-daemon/Downloads'
 cloud_mediacenter_transmission_incomplete_dir: "{{ cloud_mediacenter_mount_dir }}/{{ cloud_mediacenter_hd_mountpoint_name }}/Incoming" # default: '/var/lib/transmission-daemon/Downloads'
+cloud_mediacenter_transmission_private_dir: "{{ cloud_mediacenter_transmission_download_dir }}/private"
 cloud_mediacenter_transmission_user: 'debian-transmission'
 cloud_mediacenter_transmission_port_forwarding_enabled: 'true' # default: 'false'
 cloud_mediacenter_transmission_prefetch_enabled: 'true' # default: 'true'

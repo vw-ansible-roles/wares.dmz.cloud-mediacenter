@@ -44,7 +44,7 @@
   ansible.builtin.shell: "(echo {{ item['smbpasswd'] }}; echo {{ item['smbpasswd'] }}) | smbpasswd -s -a {{ item['name'] }}"
   with_items:
     - "{{cloud_mediacenter_samba_users}}"
-  no_log: True
+  no_log: "{{ 'False' if (playbook_debug_mode is defined and playbook_debug_mode == 'True') else 'True' }}"
 
 - name: Edit Samba configuration
   ansible.builtin.template:
@@ -174,11 +174,34 @@
 
 - name: Set acl for Transmission download/incomplete dirs
   ansible.builtin.shell:
-    cmd: "/usr/bin/setfacl -R -d -m g::rwx {{ item }}"
+    cmd: "/usr/bin/setfacl -R -d -m g::rwx,o::rx {{ item }}"
   loop:
     - "{{ cloud_mediacenter_transmission_download_dir }}"
     - "{{ cloud_mediacenter_transmission_incomplete_dir }}"
 
+- name: Create Transmission private users dirs
+  ansible.builtin.file:
+    path: "{{ cloud_mediacenter_transmission_private_dir }}/{{ item.name }}"
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ cloud_mediacenter_write_group }}"
+    mode: 'u=rwxs,g=rwxs,o-rwx'
+  loop: "{{ cloud_mediacenter_samba_users }}"
+
+- name: Change owner/permissions/setgid for Transmission private dirs
+  ansible.builtin.file:
+    path: "{{ cloud_mediacenter_transmission_private_dir }}/{{ item.name }}"
+    recurse: no
+    owner: "{{ item.name }}"
+    group: "{{ cloud_mediacenter_write_group }}"
+    mode: 'u=rwx,g=rwxs,o-rwx'
+  loop: "{{ cloud_mediacenter_samba_users }}"
+
+- name: Set acl for Transmission private dirs
+  ansible.builtin.shell:
+    cmd: "/usr/bin/setfacl -R -d -m g::rwx,o::rwx {{ cloud_mediacenter_transmission_private_dir }}/{{ item.name }}"
+  loop: "{{ cloud_mediacenter_samba_users }}"
+  
 - name: Start Transmission Daemon
   ansible.builtin.service:
     name: transmission-daemon
