@@ -23,14 +23,14 @@
   ansible.builtin.lineinfile:
     path: /etc/fstab
     # Any line that begins with cloud_mediacenter_hd_partuuid
-    regexp: '^PARTUUID={{cloud_mediacenter_hd_partuuid}}.*'
+    regexp: '^PARTUUID=.*{{ cloud_mediacenter_mount_dir | regex_escape() }}\/{{ cloud_mediacenter_hd_mountpoint_name | regex_escape() }}.*'
     line: "PARTUUID={{cloud_mediacenter_hd_partuuid}} {{ cloud_mediacenter_mount_dir }}/{{ cloud_mediacenter_hd_mountpoint_name }} {{cloud_mediacenter_hd_type}} defaults,nofail,acl 0 0"
 
 - name: Set /etc/fstab entry for secondary drive 
   ansible.builtin.lineinfile:
     path: /etc/fstab
     # Any line that begins with...
-    regexp: '^PARTUUID={{cloud_mediacenter_sd_partuuid}}.*'
+    regexp: '^PARTUUID=.*{{ cloud_mediacenter_automount_dir | regex_escape() }}\/{{ cloud_mediacenter_sd_mountpoint_name | regex_escape() }}.*'
     line: "PARTUUID={{cloud_mediacenter_sd_partuuid}} {{ cloud_mediacenter_automount_dir }}/{{ cloud_mediacenter_sd_mountpoint_name }} {{cloud_mediacenter_sd_type}} noauto,nofail,acl,x-systemd.automount,x-systemd.idle-timeout=2s,x-systemd.device-timeout=30ms 0 0"
 
 - name: Install Samba package
