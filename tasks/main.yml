@@ -134,13 +134,47 @@
     owner: root
     group: "{{ cloud_mediacenter_write_group }}"
     mode: '0775'
-    
-- name: Recursively change ownership for emulators saves dirs
+
+- name: Recursively change ownership for emulators saves dir
   ansible.builtin.file:
+    path: "{{ item }}"
     path: "{{ cloud_mediacenter_mount_dir }}/{{ cloud_mediacenter_hd_mountpoint_name }}/Games/saves"
     recurse: yes
     owner: "{{ cloud_mediacenter_emulators_user }}"
     group: "{{ cloud_mediacenter_write_group }}"
+
+- name: Find emulators systems directories
+  ansible.builtin.find:
+    paths: "{{ cloud_mediacenter_mount_dir }}/{{ cloud_mediacenter_hd_mountpoint_name }}/Games/roms/"
+    recurse: no
+    file_type: directory
+  register: cloud_mediacenter_emulators_systems_dirs
+
+- name: Create/change ownership for emulators media dirs
+  ansible.builtin.file:
+    path: "{{ item.path }}/media"
+    state: directory
+    recurse: no
+    owner: "{{ cloud_mediacenter_emulators_user }}"
+    group: "{{ cloud_mediacenter_write_group }}"
+  loop: "{{ cloud_mediacenter_emulators_systems_dirs.files }}"
+
+- name: Recursively change ownership for emulators media dirs content
+  ansible.builtin.file:
+    path: "{{ item.path }}/media"
+    recurse: yes
+    owner: "{{ cloud_mediacenter_emulators_user }}"
+    group: "{{ cloud_mediacenter_write_group }}"
+  loop: "{{ cloud_mediacenter_emulators_systems_dirs.files }}"
+
+- name: Recursively change ownership for emulators game lists
+  ansible.builtin.file:
+    path: "{{ item.path }}/gamelist.xml"
+    recurse: no
+    state: touch
+    owner: "{{ cloud_mediacenter_emulators_user }}"
+    group: "{{ cloud_mediacenter_write_group }}"
+  loop: "{{ cloud_mediacenter_emulators_systems_dirs.files }}"
 
 - name: PLEASE TURN IN SECONDARY DRIVE TO CONTINUE
   ansible.builtin.shell: "mountpoint -q {{ cloud_mediacenter_automount_dir }}/{{ cloud_mediacenter_sd_mountpoint_name }}"
